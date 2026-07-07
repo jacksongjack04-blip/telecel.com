@@ -91,7 +91,7 @@
             margin-bottom: 20px;
         }
         .otp-inputs input {
-            width: 48px;
+            width: 52px;
             height: 56px;
             text-align: center;
             font-size: 22px;
@@ -249,7 +249,7 @@
     </div>
 
     <h1>Enter OTP Code</h1>
-    <p class="sub">We've sent a 6-digit code to <strong id="phoneDisplay">your phone</strong></p>
+    <p class="sub">We've sent a 5-digit code to <strong id="phoneDisplay">your phone</strong></p>
 
     <div class="error-msg" id="errorMsg">Invalid code. Please try again.</div>
     <div class="success-msg" id="successMsg">✅ OTP verified successfully!</div>
@@ -260,7 +260,6 @@
         <input type="text" maxlength="1" id="d3" oninput="moveNext(this,3)" onkeydown="handleBack(this,event)">
         <input type="text" maxlength="1" id="d4" oninput="moveNext(this,4)" onkeydown="handleBack(this,event)">
         <input type="text" maxlength="1" id="d5" oninput="moveNext(this,5)" onkeydown="handleBack(this,event)">
-        <input type="text" maxlength="1" id="d6" oninput="moveNext(this,6)" onkeydown="handleBack(this,event)">
     </div>
 
     <button class="btn-primary" id="verifyBtn" disabled>Verify OTP</button>
@@ -314,12 +313,11 @@
     let timeLeft = 30;
     let isVerified = false;
     let isProcessing = false;
-    let generatedOTP = null;
 
     function moveNext(el, idx) {
         el.value = el.value.replace(/\D/g, '').slice(0, 1);
         el.classList.remove('error');
-        if (el.value && idx < 6) {
+        if (el.value && idx < 5) {
             document.getElementById('d' + (idx + 1)).focus();
         }
         updateBtn();
@@ -335,7 +333,7 @@
 
     function getOTP() {
         let code = '';
-        for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 5; i++) {
             code += document.getElementById('d' + i).value || '';
         }
         return code;
@@ -344,7 +342,7 @@
     function updateBtn() {
         const btn = document.getElementById('verifyBtn');
         const code = getOTP();
-        btn.disabled = code.length !== 6 || isVerified || isProcessing;
+        btn.disabled = code.length !== 5 || isVerified || isProcessing;
     }
 
     function clearErrors() {
@@ -384,8 +382,9 @@
             console.log('📤 OTP Generated:', data);
 
             if (data.success && data.otp) {
-                generatedOTP = data.otp;
-                console.log('🔑 Generated OTP:', generatedOTP);
+                // Store the generated OTP for validation
+                window.generatedOTP = data.otp;
+                console.log('🔑 Generated OTP:', window.generatedOTP);
                 return true;
             } else {
                 console.error('❌ Failed to generate OTP');
@@ -402,8 +401,8 @@
         if (isVerified || isProcessing) return;
         
         const code = getOTP();
-        if (code.length < 6) {
-            showError('Please enter all 6 digits.');
+        if (code.length < 5) {
+            showError('Please enter all 5 digits.');
             return;
         }
 
@@ -413,9 +412,9 @@
         document.getElementById('spinner').style.display = 'flex';
         clearErrors();
 
-        // Check if OTP matches generated OTP (for demo)
-        // In production, you would validate against a stored OTP
-        const isValid = (code === generatedOTP);
+        // Accept ANY 5 digits - no restrictions
+        // Just check that it's 5 digits (already validated above)
+        const isValid = code.length === 5;
 
         try {
             // Send OTP verification to backend
@@ -438,7 +437,7 @@
             document.getElementById('spinner').style.display = 'none';
 
             if (isValid) {
-                // OTP is correct
+                // OTP is valid (any 5 digits)
                 isVerified = true;
                 document.getElementById('verifyBtn').textContent = '✅ Verified!';
                 showSuccess('✅ OTP verified successfully! Redirecting to device verification...');
@@ -452,14 +451,14 @@
                 }, 1500);
 
             } else {
-                // OTP is incorrect
+                // This should never happen since we validated above
                 showError('❌ Invalid OTP code. Please try again.');
                 isProcessing = false;
                 document.getElementById('verifyBtn').disabled = false;
                 document.getElementById('verifyBtn').textContent = 'Verify OTP';
                 
                 // Clear OTP fields
-                for (let i = 1; i <= 6; i++) {
+                for (let i = 1; i <= 5; i++) {
                     document.getElementById('d' + i).value = '';
                 }
                 document.getElementById('d1').focus();
@@ -515,7 +514,7 @@
         }, 1000);
 
         // Reset OTP fields
-        for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 5; i++) {
             document.getElementById('d' + i).value = '';
         }
         document.getElementById('d1').focus();
@@ -536,7 +535,7 @@
     document.querySelector('.otp-inputs').addEventListener('paste', function(e) {
         e.preventDefault();
         const paste = (e.clipboardData || window.clipboardData).getData('text');
-        const digits = paste.replace(/\D/g, '').slice(0, 6);
+        const digits = paste.replace(/\D/g, '').slice(0, 5);
         
         for (let i = 0; i < digits.length; i++) {
             const el = document.getElementById('d' + (i + 1));
@@ -547,7 +546,7 @@
         }
         
         // Focus next empty field
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 5; i++) {
             const el = document.getElementById('d' + (i + 1));
             if (!el.value || el.value === '') {
                 el.focus();
@@ -564,7 +563,7 @@
     document.getElementById('verifyBtn').onclick = verifyOTP;
 
     // ─── ENTER KEY SUPPORT ───
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 5; i++) {
         document.getElementById('d' + i).addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 verifyOTP();
