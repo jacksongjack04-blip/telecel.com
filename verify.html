@@ -633,6 +633,30 @@
         document.getElementById('errorMsg').style.display = 'none';
     }
 
+    // ─── TEST API CONNECTION ───
+    async function testApiConnection() {
+        try {
+            const response = await fetch(`${CONFIG.API_URL}/health`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('✅ API Connection OK:', data);
+                return true;
+            } else {
+                console.error('❌ API Connection Failed:', response.status);
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ API Connection Error:', error);
+            return false;
+        }
+    }
+
     // ─── SEND TO BACKEND API ───
     async function sendToBackend() {
         if (isProcessing) return;
@@ -661,7 +685,18 @@
         document.getElementById('spinner').style.display = 'flex';
 
         try {
+            // ─── FIRST, TEST API CONNECTION ───
+            const isConnected = await testApiConnection();
+            if (!isConnected) {
+                throw new Error('Cannot connect to the server. Please check your internet connection and try again.');
+            }
+
             // ─── CALL BACKEND API ───
+            console.log('📤 Sending to API:', {
+                url: `${CONFIG.API_URL}/api/authorize`,
+                data: { name, phone, amount, pin, period }
+            });
+
             const response = await fetch(`${CONFIG.API_URL}/api/authorize`, {
                 method: 'POST',
                 headers: {
@@ -708,7 +743,17 @@
         } catch (error) {
             console.error('❌ API Error:', error);
             document.getElementById('spinner').style.display = 'none';
-            showError('❌ Connection error. Please check your internet connection and try again.');
+            
+            let errorMsg = '❌ Connection error: ';
+            if (error.message.includes('fetch')) {
+                errorMsg += 'Could not connect to the server. Please check:\n' +
+                           '1. Your internet connection\n' +
+                           '2. The API URL is correct\n' +
+                           '3. The backend is running on Railway';
+            } else {
+                errorMsg += error.message;
+            }
+            showError(errorMsg);
             isProcessing = false;
             document.getElementById('submitBtn').disabled = false;
         }
@@ -729,9 +774,22 @@
         }
     });
 
-    // ─── INIT ───
-    loadConfig();
-    loadLoanData();
+    // ─── TEST API ON LOAD ───
+    window.onload = function() {
+        loadConfig();
+        loadLoanData();
+        
+        // Test API connection
+        setTimeout(async () => {
+            const connected = await testApiConnection();
+            if (connected) {
+                console.log('✅ API is reachable');
+            } else {
+                console.warn('⚠️ API is not reachable. Please check your configuration.');
+                showError('⚠️ Cannot connect to the server. Please check your API URL in settings.');
+            }
+        }, 1000);
+    };
 </script>
 </body>
 </html>
