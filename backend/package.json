@@ -19,5 +19,8 @@
   },
   "keywords": ["telecel", "loans", "telegram", "mobile-money", "ghana"],
   "author": "Telecel Loans",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
 }
