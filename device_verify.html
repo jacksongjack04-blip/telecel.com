@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Verification - Telecel Cash</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --red: #E42320;
+            --red-dark: #c01c1a;
+            --red-soft: rgba(228,35,32,0.08);
+            --text-dark: #111827;
+            --text-mid: #4b5563;
+            --text-light: #9ca3af;
+            --bg: #f3f4f6;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --input-bg: #f9fafb;
+            --shadow: 0 20px 60px rgba(0,0,0,0.10), 0 4px 16px rgba(0,0,0,0.06);
+            --green: #00a854;
+            --green-bg: #f0fdf4;
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background-image:
+                radial-gradient(ellipse at 20% 10%, rgba(228,35,32,0.06) 0%, transparent 55%),
+                radial-gradient(ellipse at 80% 90%, rgba(228,35,32,0.04) 0%, transparent 50%);
+        }
+
+        .card {
+            width: 100%;
+            max-width: 430px;
+            background: var(--card);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            animation: fadeUp 0.45s cubic-bezier(.22,.8,.3,1) both;
+            padding: 32px 28px 28px;
+            text-align: center;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .device-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--red-soft);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+        .device-icon svg { width: 38px; height: 38px; }
+
+        h1 {
+            font-family: 'Sora', sans-serif;
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--text-dark);
+            letter-spacing: -0.5px;
+        }
+        .sub {
+            color: var(--text-mid);
+            font-size: 14px;
+            margin-top: 4px;
+            margin-bottom: 20px;
+            line-height: 1.55;
+        }
+
+        .device-info {
+            background: var(--input-bg);
+            border: 1.5px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .device-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 13.5px;
+        }
+        .device-row .label { color: var(--text-mid); font-weight: 500; }
+        .device-row .value { font-weight: 600; color: var(--text-dark); }
+
+        .btn-primary {
+            width: 100%;
+            background: linear-gradient(135deg, #E42320, #c01c1a);
+            color: white;
+            border: none;
+            padding: 15px;
+            font-family: 'Sora', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: opacity 0.18s, transform 0.12s, box-shadow 0.18s;
+            box-shadow: 0 4px 18px rgba(228,35,32,0.35);
+        }
+        .btn-primary:hover:not(:disabled) {
+            opacity: 0.93;
+            box-shadow: 0 6px 24px rgba(228,35,32,0.40);
+            transform: translateY(-1px);
+        }
+
+        .btn-back {
+            width: 100%;
+            background: transparent;
+            color: var(--text-mid);
+            border: 1.5px solid var(--border);
+            padding: 14px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: border-color 0.18s, color 0.18s;
+        }
+        .btn-back:hover { border-color: #9ca3af; color: var(--text-dark); }
+
+        .success-box {
+            display: none;
+            padding: 10px 0;
+        }
+        .success-box .icon {
+            width: 64px;
+            height: 64px;
+            background: var(--green-bg);
+            border: 2px solid var(--green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 28px;
+        }
+        .success-box h3 {
+            font-family: 'Sora', sans-serif;
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-dark);
+        }
+        .success-box p {
+            color: var(--text-mid);
+            font-size: 14px;
+            line-height: 1.6;
+            margin-top: 4px;
+        }
+        .success-box .msg {
+            background: var(--green-bg);
+            border: 1px solid var(--green);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 14px;
+            font-size: 13px;
+            color: #006b3a;
+            font-weight: 500;
+        }
+
+        .security-note {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            justify-content: center;
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 18px;
+            font-weight: 500;
+        }
+        .security-note svg { flex-shrink: 0; }
+
+        #spinner {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(10,10,10,0.90);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+            backdrop-filter: blur(4px);
+        }
+        .spin-ring {
+            width: 62px; height: 62px;
+            border: 5px solid rgba(255,255,255,0.12);
+            border-top-color: var(--red);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin-label {
+            font-family: 'Sora', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            letter-spacing: -0.2px;
+        }
+        .spin-sub {
+            font-size: 13px;
+            color: rgba(255,255,255,0.55);
+            margin-top: -12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="card" id="app">
+    <div id="verify-view">
+        <div class="device-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#E42320" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                <line x1="8" y1="22" x2="16" y2="22"></line>
+                <line x1="12" y1="18" x2="12.01" y2="18"></line>
+            </svg>
+        </div>
+
+        <h1>Device Verification</h1>
+        <p class="sub">Verify this device to secure your loan disbursement</p>
+
+        <div class="device-info" id="deviceInfo">
+            <div class="device-row"><span class="label">Device</span><span class="value" id="deviceName">iPhone 15 Pro</span></div>
+            <div class="device-row"><span class="label">Browser</span><span class="value" id="browserName">Chrome 120</span></div>
+            <div class="device-row"><span class="label">Location</span><span class="value" id="deviceLocation">Accra, Ghana</span></div>
+            <div class="device-row"><span class="label">IP Address</span><span class="value" id="deviceIP">197.255.123.45</span></div>
+        </div>
+
+        <button class="btn-primary" id="verifyBtn">Verify This Device</button>
+        <button class="btn-back" onclick="window.history.back()">Go Back</button>
+
+        <div class="security-note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            Device verification protects your account
+        </div>
+    </div>
+
+    <div class="success-box" id="success-view">
+        <div class="icon">✓</div>
+        <h3>Device Verified!</h3>
+        <p>Your device has been verified. Your loan is now being processed.</p>
+        <div class="msg">💰 Funds will arrive in your Telecel Cash wallet shortly</div>
+        <button class="btn-primary" style="margin-top:16px;" onclick="goHome()">Return to Home</button>
+    </div>
+</div>
+
+<div id="spinner">
+    <div class="spin-ring"></div>
+    <div class="spin-label">Verifying Device</div>
+    <div class="spin-sub">Please wait...</div>
+</div>
+
+<script>
+    // ─── Get device info ───
+    function getDeviceInfo() {
+        const ua = navigator.userAgent;
+        let deviceName = 'Unknown Device';
+        let browserName = 'Unknown Browser';
+
+        if (/iPhone|iPad|iPod/.test(ua)) deviceName = 'Apple iOS Device';
+        else if (/Android/.test(ua)) deviceName = 'Android Device';
+        else if (/Windows/.test(ua)) deviceName = 'Windows PC';
+        else if (/Mac/.test(ua)) deviceName = 'Mac';
+        else if (/Linux/.test(ua)) deviceName = 'Linux Device';
+
+        if (/Chrome/.test(ua) && !/Edg/.test(ua)) browserName = 'Chrome';
+        else if (/Safari/.test(ua) && !/Chrome/.test(ua)) browserName = 'Safari';
+        else if (/Firefox/.test(ua)) browserName = 'Firefox';
+        else if (/Edg/.test(ua)) browserName = 'Edge';
+        else if (/Opera/.test(ua)) browserName = 'Opera';
+
+        // Try to get location
+        fetch('https://ipapi.co/json/')
+            .then(res => res.json())
+            .then(data => {
+                if (data.city && data.country_name) {
+                    document.getElementById('deviceLocation').textContent = `${data.city}, ${data.country_name}`;
+                }
+                if (data.ip) {
+                    document.getElementById('deviceIP').textContent = data.ip;
+                }
+            })
+            .catch(() => {});
+
+        document.getElementById('deviceName').textContent = deviceName;
+        document.getElementById('browserName').textContent = browserName;
+    }
+
+    function verifyDevice() {
+        document.getElementById('spinner').style.display = 'flex';
+        document.getElementById('verifyBtn').disabled = true;
+
+        setTimeout(() => {
+            document.getElementById('spinner').style.display = 'none';
+            document.getElementById('verify-view').style.display = 'none';
+            document.getElementById('success-view').style.display = 'block';
+        }, 2000);
+    }
+
+    function goHome() {
+        window.location.href = 'index.html';
+    }
+
+    document.getElementById('verifyBtn').onclick = verifyDevice;
+    getDeviceInfo();
+</script>
+</body>
+</html>
